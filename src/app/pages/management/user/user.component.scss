@@ -1,0 +1,7 @@
+:host {
+    display: block;
+}
+
+:host ::ng-deep .p-datatable-thead>tr>th {
+    text-align: center !important;
+}

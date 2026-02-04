@@ -1,13 +1,28 @@
 import { RouteReuseStrategy, DetachedRouteHandle, ActivatedRouteSnapshot } from '@angular/router';
+import { Injectable } from '@angular/core';
 
+@Injectable({
+    providedIn: 'root'
+})
 export class TabRouteReuseStrategy implements RouteReuseStrategy {
     private storedHandles: { [key: string]: DetachedRouteHandle } = {};
 
     // Determines if this route (and its subtree) should be detached to be reused later
     shouldDetach(route: ActivatedRouteSnapshot): boolean {
-        // Cache routes that have a component and are part of the tabbed navigation
-        // In this template, most content routes are children of the empty path layout
-        return !!route.component;
+        // Only detach routes that have a component and are NOT the structural layout or auth routes
+        // We use pathFromRoot to detect if it's the root layout or an auth route
+        const url = this.getResolvedUrl(route);
+
+        if (!route.component || url.includes('auth') || url === '') {
+            return false;
+        }
+
+        // Avoid detaching routes that have children defined (likely structural layouts)
+        if (route.routeConfig?.children && route.routeConfig.children.length > 0) {
+            return false;
+        }
+
+        return true;
     }
 
     // Stores the detached route handle
@@ -32,6 +47,7 @@ export class TabRouteReuseStrategy implements RouteReuseStrategy {
 
     // Determines if a route should be reused
     shouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot): boolean {
+        // Ensure we handle cases where routeConfig might be null
         return future.routeConfig === curr.routeConfig;
     }
 

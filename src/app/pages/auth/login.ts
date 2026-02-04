@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
@@ -7,12 +7,19 @@ import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
 import { RippleModule } from 'primeng/ripple';
 import { AppFloatingConfigurator } from '../../layout/component/app.floatingconfigurator';
+import { AuthService } from '../../service/auth.service';
+import { Router } from '@angular/router';
+import { MessageService } from 'primeng/api';
+import { ToastModule } from 'primeng/toast';
+import * as CryptoJS from 'crypto-js';
 
 @Component({
     selector: 'app-login',
     standalone: true,
-    imports: [ButtonModule, CheckboxModule, InputTextModule, PasswordModule, FormsModule, RouterModule, RippleModule, AppFloatingConfigurator],
+    imports: [ButtonModule, CheckboxModule, InputTextModule, PasswordModule, FormsModule, RouterModule, RippleModule, AppFloatingConfigurator, ToastModule],
+    providers: [MessageService],
     template: `
+        <p-toast />
         <app-floating-configurator />
         <div class="bg-surface-50 dark:bg-surface-950 flex items-center justify-center min-h-screen min-w-screen overflow-hidden">
             <div class="flex flex-col items-center justify-center">
@@ -41,11 +48,11 @@ import { AppFloatingConfigurator } from '../../layout/component/app.floatingconf
                         </div>
 
                         <div>
-                            <label for="email1" class="block text-surface-900 dark:text-surface-0 text-xl font-medium mb-2">Email</label>
-                            <input pInputText id="email1" type="text" placeholder="Email address" class="w-full md:w-120 mb-8" [(ngModel)]="email" />
+                            <label for="username" class="block text-surface-900 dark:text-surface-0 text-xl font-medium mb-2">Username</label>
+                            <input pInputText id="username" type="text" placeholder="Username" class="w-full md:w-120 mb-8" [(ngModel)]="username" (keydown.enter)="onLogin()" />
 
                             <label for="password1" class="block text-surface-900 dark:text-surface-0 font-medium text-xl mb-2">Password</label>
-                            <p-password id="password1" [(ngModel)]="password" placeholder="Password" [toggleMask]="true" styleClass="mb-4" [fluid]="true" [feedback]="false"></p-password>
+                            <p-password id="password1" [(ngModel)]="password" (keydown.enter)="onLogin()" placeholder="Password" [toggleMask]="true" styleClass="mb-4" [fluid]="true" [feedback]="false"></p-password>
 
                             <div class="flex items-center justify-between mt-2 mb-8 gap-8">
                                 <div class="flex items-center">
@@ -54,7 +61,7 @@ import { AppFloatingConfigurator } from '../../layout/component/app.floatingconf
                                 </div>
                                 <span class="font-medium no-underline ml-2 text-right cursor-pointer text-primary">Forgot password?</span>
                             </div>
-                            <p-button label="Sign In" styleClass="w-full" routerLink="/"></p-button>
+                            <p-button label="Sign In" styleClass="w-full" (onClick)="onLogin()" [loading]="loading"></p-button>
                         </div>
                     </div>
                 </div>
@@ -62,10 +69,76 @@ import { AppFloatingConfigurator } from '../../layout/component/app.floatingconf
         </div>
     `
 })
-export class Login {
-    email: string = '';
+export class Login implements OnInit {
+    username: string = '';
 
     password: string = '';
 
     checked: boolean = false;
+
+    loading: boolean = false;
+
+    private readonly secretKey = 'RFactory_Secret_Key_2026';
+
+    constructor(
+        private authService: AuthService,
+        private router: Router,
+        private messageService: MessageService
+    ) { }
+
+    ngOnInit() {
+        const savedUserEnc = localStorage.getItem('remembered_user');
+        const savedPassEnc = localStorage.getItem('remembered_pass');
+
+        if (savedUserEnc && savedPassEnc) {
+            try {
+                const userBytes = CryptoJS.AES.decrypt(savedUserEnc, this.secretKey);
+                const passBytes = CryptoJS.AES.decrypt(savedPassEnc, this.secretKey);
+
+                this.username = userBytes.toString(CryptoJS.enc.Utf8);
+                this.password = passBytes.toString(CryptoJS.enc.Utf8);
+                this.checked = true;
+            } catch (e) {
+                console.error('Error decrypting credentials', e);
+                localStorage.removeItem('remembered_user');
+                localStorage.removeItem('remembered_pass');
+            }
+        }
+    }
+
+    onLogin() {
+        if (!this.username || !this.password) {
+            this.messageService.add({ severity: 'error', summary: 'Error', detail: 'Please enter username and password' });
+            return;
+        }
+
+        this.loading = true;
+        this.authService.login({ username: this.username, password: this.password }).subscribe({
+            next: (res) => {
+                this.loading = false;
+                if (res.success) {
+                    localStorage.setItem('token', res.data);
+
+                    if (this.checked) {
+                        const encryptedUser = CryptoJS.AES.encrypt(this.username, this.secretKey).toString();
+                        const encryptedPass = CryptoJS.AES.encrypt(this.password, this.secretKey).toString();
+
+                        localStorage.setItem('remembered_user', encryptedUser);
+                        localStorage.setItem('remembered_pass', encryptedPass);
+                    } else {
+                        localStorage.removeItem('remembered_user');
+                        localStorage.removeItem('remembered_pass');
+                    }
+
+                    this.router.navigate(['/']);
+                } else {
+                    this.messageService.add({ severity: 'error', summary: 'Login Failed', detail: res.message || 'Unknown error' });
+                }
+            },
+            error: (err) => {
+                this.loading = false;
+                this.messageService.add({ severity: 'error', summary: 'Error', detail: 'Invalid username or password' });
+            }
+        });
+    }
 }

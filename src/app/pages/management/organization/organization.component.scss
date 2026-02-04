@@ -1,0 +1,20 @@
+:host {
+    display: block;
+}
+
+:host ::ng-deep .p-treetable-thead>tr>th {
+    text-align: center !important;
+}
+
+.custom-clear-btn {
+    position: absolute !important;
+    right: 2.2rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 2rem !important;
+    height: 2rem !important;
+    z-index: 10;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
